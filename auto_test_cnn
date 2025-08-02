@@ -1,0 +1,71 @@
+// ==UserScript==
+// @name         自动点击是否能够链接
+// @namespace    http://tampermonkey.net/
+// @version      2025-08-02
+// @match        http://10.0.11.1/cgi-bin/luci/admin/services/passwall/node_list
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+    // 定义一个函数来依次点击按钮
+    function clickButtonsSequentially(testButtons,index = 0) {
+        if (index < testButtons.length) {
+            // 点击当前按钮
+            testButtons[index].click();
+
+            // 设置100毫秒后点击下一个按钮
+            setTimeout(() => {
+                clickButtonsSequentially(testButtons,index + 1);
+            }, 10);
+        }else
+        {
+            setTimeout(() => {
+                hide_sort();
+            }, 20_000);
+        }
+    }
+
+    function hide_sort(){
+        // 1. 隐藏所有包含"超时"的行
+        const rows = Array.from(document.querySelectorAll('tr.cbi-section-table-row'));
+
+        rows.forEach(row => {
+            const pingCell = row.querySelector('td[data-name="ping"]');
+            const urlTestCell = row.querySelector('td[data-name="_url_test"]');
+
+            const hasTimeout = (pingCell && pingCell.textContent.includes('超时')) ||
+                  (urlTestCell && urlTestCell.textContent.includes('超时'));
+
+            if (hasTimeout) {
+                row.style.display = 'none';
+            }
+        });
+
+        // 2. 对剩余可见行按 _url_test 列的延迟（数字部分）升序排序
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+
+        // 提取 _url_test 列的数值（单位：ms）
+        visibleRows.forEach(row => {
+            const urlTestCell = row.querySelector('td[data-name="_url_test"]');
+            const text = urlTestCell.textContent.trim();
+
+            // 提取数字部分（如 "260.38 ms" -> 260.38）
+            const delay = parseFloat(text.match(/\d+\.?\d*/)?.[0]) || Infinity;
+            row.dataset.delay = delay; // 存储延迟值，用于排序
+        });
+
+        // 按延迟升序排序
+        visibleRows.sort((a, b) => a.dataset.delay - b.dataset.delay);
+
+        // 重新插入排序后的行（保持DOM顺序）
+        const tbody = document.querySelector('tbody');
+        visibleRows.forEach(row => tbody.appendChild(row));
+    }
+
+    setTimeout(() => {
+        const testButtons = document.querySelectorAll('input[value="可用性测试"]');
+        clickButtonsSequentially(testButtons);
+    }, 2000);
+
+})();
